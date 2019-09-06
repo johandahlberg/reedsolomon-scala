@@ -73,7 +73,8 @@ case class ReedSolomonCoder(
   /**
     * Encode a message, with error correction bits.
     * @param message The message to add error correction bits to, must be shorter than k
-    * @return An array of length n, with n - k error correction bits.
+    * @return An array of length n, with n - k error correction bits. For messages shorter than k,
+    * zeros will be appended to the beginning of the message, to give the message length k.
     */
   def encode(message: Array[Int]): Array[Int] = {
     // This implementation is based on encode_fast in the unireedsolomon python library
@@ -100,8 +101,17 @@ case class ReedSolomonCoder(
     }
   }
 
+  /**
+    * Decode a message, containg the original data and some error correction bits.
+    * @param message The data and some error correction bits
+    * @param noStrip It this is set to false, leading zeros will not be removed from the message
+    * @param erasurePosOption If the erasure positions are already known, they can be given here.
+    * @param onlyErasures Set to true to only correct errasure errors.
+    * @return A tupple, where the first value contains the decoded message, and the second contains the
+    * corrected error correction symbols.
+    */
   def decode(
-      r: Array[Int],
+      message: Array[Int],
       noStrip: Boolean = false,
       erasurePosOption: Option[Array[Int]] = None,
       onlyErasure: Boolean = false
@@ -109,18 +119,18 @@ case class ReedSolomonCoder(
 
     // This implementation is based on decode_fast in the unireedsolomon python library
 
-    val rp = Polynomial.fromFiniteField(field)(r)
+    val rp = Polynomial.fromFiniteField(field)(message)
 
     val erasurePos = erasurePosOption.map { e =>
-      e.map(x => r.length - 1 - x)
+      e.map(x => message.length - 1 - x)
     }
 
     val sz = syndromes(rp)
 
     // There were no errors
     if (sz.cooefficients.count(_.isZero) == sz.length) {
-      val ret = r.dropRight(n - k)
-      val ecc = r.takeRight(n - k)
+      val ret = message.dropRight(n - k)
+      val ecc = message.takeRight(n - k)
 
       if (noStrip) {
         (ret, ecc)
@@ -173,7 +183,7 @@ case class ReedSolomonCoder(
       //    s"Input was: ${r.mkString("[", ",", "]")} and c was: $c"
       //)
       // TODO Don't know of this, or the above is better
-      val correctedC = if (c.length > r.length) {
+      val correctedC = if (c.length > message.length) {
         rp
       } else {
         c
