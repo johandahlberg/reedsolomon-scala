@@ -6,6 +6,11 @@ import scala.collection.BitSet
 import scala.collection.mutable.{BitSet => MutableBitSet}
 import util.control.Breaks._
 
+/**
+  * A Galois field, is a set of numbers that contains a finite number of elements, and defines operations that
+  * you would expect from the a normal set, like integers. For a more formal definition, and more information
+  * see wikipedia: https://en.wikipedia.org/wiki/Finite_field
+  */
 object GaloisField {
 
   def findPrimePolynomials(
@@ -58,6 +63,7 @@ object GaloisField {
     }
     correctPrimes.toArray
   }
+
 }
 
 case class GaloisField(
@@ -67,8 +73,10 @@ case class GaloisField(
 ) {
 
   val gf2Charac: Int = (pow(2, gf2CExp) - 1).toInt
-  val gf2intExpTable: Array[Int] = {
+  val gf2intExpTable: Array[Int] = computeExponentialTable
+  val gf2intLogTable: Array[Int] = computeLogTable(gf2intExpTable)
 
+  private def computeExponentialTable = {
     @tailrec
     def comp(
         g: GF2Int,
@@ -87,14 +95,15 @@ case class GaloisField(
     comp(GF2Int(1), initialArray, 0, initialArray.length)
   }
 
-  val gf2intLogTable: Array[Int] = {
-    gf2intExpTable
+  private def computeLogTable(expTable: Array[Int]) = {
+    expTable
       .dropRight(1)
       .zipWithIndex
       .foldLeft(Array.fill(gf2Charac + 1)(-1)) {
         case (table, (elem, index)) =>
           table.updated(elem, index)
       }
+
   }
 
   object GF2Int {

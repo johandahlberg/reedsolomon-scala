@@ -4,6 +4,9 @@ import scala.annotation.tailrec
 import scala.annotation.meta.field
 import scala.reflect.ClassTag
 
+/**
+  * Trait that needs to be implemented to provide aritmetics for polynomial coefficients
+  */
 trait PolynomialAritmetics[T] {
   def plus(x: T, y: T): T
   def div(x: T, y: T): T
@@ -16,6 +19,10 @@ trait PolynomialAritmetics[T] {
   def xor(x: T, y: T): T
 }
 
+/**
+  * PolynomialImplicits contain the methods necessary to do polynomial aritmetics for some simple
+  * numeric types, e.g. integers and doubles
+  */
 object PolynomialImplicits {
 
   implicit val intPolynomialAritmetics: PolynomialAritmetics[Int] =
@@ -71,6 +78,13 @@ object PolynomialImplicits {
     }
 }
 
+/**
+  *  Represents a Polynomial for the type T i.e. for T=Int: y = 3x^3 + x + 1
+  *
+  * It requires a typeclass to be passed (implicitly or expliclity) that provides
+  * polynomial artimetics, i.e. rules for how to carry out mathematical opertions on the coefficents
+  * when doing calculations on the polynomial.
+  */
 case class Polynomial[T: ClassTag](
     inputCoefficients: Array[T],
     keepZeros: Boolean = false
@@ -262,9 +276,17 @@ case class Polynomial[T: ClassTag](
 
 object Polynomial {
 
+  /**
+    * Create an empty polynomial
+    */
   def apply[T: PolynomialAritmetics: ClassTag](): Polynomial[T] =
     Polynomial[T](Array())
 
+  /**
+    * Utility method to cheate a polynomial where the coefficients are
+    * elements in a GaloisField (i.e. a fintite field). Useful when you have the fields
+    * and a set of coefficients.
+    */
   def fromFiniteField(
       field: GaloisField
   )(coefficients: Array[Int]) = {
@@ -274,7 +296,7 @@ object Polynomial {
   }
 
   @tailrec
-  final def division[T: ClassTag](
+  protected[reedsolomon] final def division[T: ClassTag](
       dividend: Polynomial[T],
       divisor: Polynomial[T],
       quotient: Polynomial[T]
