@@ -47,7 +47,7 @@ case class ReedSolomonCoder(
       .toArray
   }
 
-  val g: Map[Int, Polynomial[field.GF2Int]] = {
+  val irreducibleGeneratorPolynoial: Map[Int, Polynomial[field.GF2Int]] = {
 
     val initialMap = Map(
       0 -> Polynomial(Array(field.GF2Int(1))),
@@ -70,28 +70,28 @@ case class ReedSolomonCoder(
     mapAndPolynomials._1
   }
 
-  // Based on encode_fast
-  def encode(
-      message: Array[Int],
-      k: Option[Int] = None
-  ): Array[Int] = {
+  /**
+    * Encode a message, with error correction bits.
+    * @param message The message to add error correction bits to, must be shorter than k
+    * @return An array of length n, with n - k error correction bits.
+    */
+  def encode(message: Array[Int]): Array[Int] = {
+    // This implementation is based on encode_fast in the unireedsolomon python library
 
     if (message.isEmpty) {
       Array()
     } else {
-      val kToUse = k.getOrElse(this.k)
-
       require(
-        message.length <= kToUse,
-        s"Message length is $kToUse. Message was: ${message.length}"
+        message.length <= k,
+        s"Message length is $k. Message was: ${message.length}. The message must be shorter than k."
       )
 
       val m = Polynomial.fromFiniteField(field) { message }
       val mPrime = Polynomial(
-        m.cooefficients ++ Array.fill(n - kToUse)(field.GF2Int(0))
+        m.cooefficients ++ Array.fill(n - k)(field.GF2Int(0))
       )
 
-      val b = mPrime.ggFastMod(g(kToUse))
+      val b = mPrime.ggFastMod(irreducibleGeneratorPolynoial(k))
 
       val nFirstOfMPrime = mPrime.cooefficients.dropRight(b.length)
       val resArray: Array[Int] =
@@ -100,16 +100,14 @@ case class ReedSolomonCoder(
     }
   }
 
-  // Based on decode_fast
   def decode(
       r: Array[Int],
       noStrip: Boolean = false,
-      k: Option[Int] = None,
       erasurePosOption: Option[Array[Int]] = None,
       onlyErasure: Boolean = false
   ): (Array[Int], Array[Int]) = {
 
-    val kToUse = k.getOrElse(this.k)
+    // This implementation is based on decode_fast in the unireedsolomon python library
 
     val rp = Polynomial.fromFiniteField(field)(r)
 
@@ -117,12 +115,12 @@ case class ReedSolomonCoder(
       e.map(x => r.length - 1 - x)
     }
 
-    val sz = syndromes(rp, k)
+    val sz = syndromes(rp)
 
     // There were no errors
     if (sz.cooefficients.count(_.isZero) == sz.length) {
-      val ret = r.dropRight(n - kToUse)
-      val ecc = r.takeRight(n - kToUse)
+      val ret = r.dropRight(n - k)
+      val ecc = r.takeRight(n - k)
 
       if (noStrip) {
         (ret, ecc)
@@ -136,7 +134,7 @@ case class ReedSolomonCoder(
         (
           erasurePos.get.length,
           Some(erasureLoc),
-          Some(findErrorEvaluator(sz, erasureLoc, k = k))
+          Some(findErrorEvaluator(sz, erasureLoc))
         )
       } else {
         (0, None, None)
@@ -146,13 +144,13 @@ case class ReedSolomonCoder(
         (erasureLoc.get, erasureEval.get)
       } else {
         val (sigmaTemp, _) =
-          berlekampMassey(sz, k, erasureLoc, erasureEval, erasureCount)
-        (sigmaTemp, findErrorEvaluator(sz, sigmaTemp, k))
+          berlekampMassey(sz, erasureLoc, erasureEval, erasureCount)
+        (sigmaTemp, findErrorEvaluator(sz, sigmaTemp))
       }
       val (x, j) = chienSearch(sigma)
 
       // TODO Include possiblity of failure in type signature
-      require(j.length <= n - kToUse, "Potentially incorrect decoding")
+      require(j.length <= n - k, "Potentially incorrect decoding")
 
       val y = forney(omega, x)
 
@@ -181,12 +179,12 @@ case class ReedSolomonCoder(
         c
       }
 
-      val ret = correctedC.cooefficients.dropRight(n - kToUse).map(_.i)
-      val ecc = correctedC.cooefficients.takeRight(n - kToUse).map(_.i)
+      val ret = correctedC.cooefficients.dropRight(n - k).map(_.i)
+      val ecc = correctedC.cooefficients.takeRight(n - k).map(_.i)
 
       if (noStrip) {
         if (ret.isEmpty) {
-          (Array.fill(kToUse)(0), ecc)
+          (Array.fill(k)(0), ecc)
         } else {
           (ret, ecc)
         }
@@ -196,34 +194,28 @@ case class ReedSolomonCoder(
     }
   }
 
-  def check(r: Array[Int], k: Option[Int] = None): Boolean = {
+  def check(r: Array[Int]): Boolean = {
 
-    val kToUse = k.getOrElse(this.k)
     val c = Polynomial.fromFiniteField(field)(r)
-    val currentG = g(kToUse)
+    val currentG = irreducibleGeneratorPolynoial(k)
 
     (c % currentG).isZero
   }
 
-  def checkFast(r: Array[Int], k: Option[Int] = None): Boolean = {
-
-    val kToUse = k.getOrElse(this.k)
+  def checkFast(r: Array[Int]): Boolean = {
 
     val newR = Polynomial.fromFiniteField(field)(r)
-    val sz = syndromes(newR, k)
+    val sz = syndromes(newR)
 
     sz.cooefficients.count(x => x.i == 0) == sz.length
   }
 
   protected[reedsolomon] def syndromes(
-      r: Polynomial[field.GF2Int],
-      k: Option[Int] = None
+      r: Polynomial[field.GF2Int]
   ): Polynomial[field.GF2Int] = {
 
-    val kToUse = k.getOrElse(this.k)
-
     val firstCoeefs =
-      (for { l <- Range(n - kToUse - 1, -1, -1) } yield {
+      (for { l <- Range(n - k - 1, -1, -1) } yield {
         val pow = field.GF2Int(generator).pow(l + fcr)
         val res = r.evaluate(pow)._2
         res
@@ -232,18 +224,16 @@ case class ReedSolomonCoder(
     Polynomial(firstCoeefs appended field.GF2Int(0), keepZeros = true)
   }
 
-  protected def findErrorEvaluator(
+  protected[reedsolomon] def findErrorEvaluator(
       synd: Polynomial[field.GF2Int],
-      sigma: Polynomial[field.GF2Int],
-      k: Option[Int]
+      sigma: Polynomial[field.GF2Int]
   ): Polynomial[field.GF2Int] = {
-    val kToUse = k.getOrElse(this.k)
     (synd * sigma) % (Polynomial(
-      Array(field.GF2Int(1)) :++ Array.fill(n - kToUse + 1)(field.GF2Int(0))
+      Array(field.GF2Int(1)) :++ Array.fill(n - k + 1)(field.GF2Int(0))
     ))
   }
 
-  protected def findErasureLocator(
+  protected[reedsolomon] def findErasureLocator(
       erasurePos: Array[Int]
   ): Polynomial[field.GF2Int] = {
     erasurePos.foldLeft(Polynomial(Array(field.GF2Int(1)))) {
@@ -255,7 +245,7 @@ case class ReedSolomonCoder(
     }
   }
 
-  def forney(
+  protected[reedsolomon] def forney(
       omega: Polynomial[field.GF2Int],
       x: Array[field.GF2Int]
   ): Array[field.GF2Int] = {
@@ -306,7 +296,6 @@ case class ReedSolomonCoder(
   // based on berlekamp_massey_fast
   protected[reedsolomon] def berlekampMassey(
       s: Polynomial[field.GF2Int],
-      k: Option[Int] = None,
       erasures_loc: Option[Polynomial[field.GF2Int]] = None,
       erasures_eval: Option[Polynomial[field.GF2Int]] = None,
       erasures_count: Int = 0
@@ -321,8 +310,6 @@ case class ReedSolomonCoder(
         a: Polynomial[field.GF2Int],
         lUpdateFlag: Int
     )
-
-    val kToUse = k.getOrElse(this.k)
 
     val initalValues = erasures_loc match {
       case Some(polynomial) => {
@@ -357,8 +344,8 @@ case class ReedSolomonCoder(
       }
     }
 
-    val syndShift = if (s.length > (n - kToUse)) {
-      s.length - (n - kToUse)
+    val syndShift = if (s.length > (n - k)) {
+      s.length - (n - k)
     } else 0
 
     val one = Polynomial(Array(field.GF2Int(1)))
@@ -366,7 +353,7 @@ case class ReedSolomonCoder(
 
     val s2 = one + s
 
-    val comp = (Range(0, n - kToUse - erasures_count)).foldLeft(initalValues) {
+    val comp = (Range(0, n - k - erasures_count)).foldLeft(initalValues) {
       case (container, l) => {
 
         val k = erasures_count + l + syndShift
