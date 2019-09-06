@@ -1,5 +1,7 @@
 # Reed-Solomon encoding in Scala
 
+[![Build Status](https://travis-ci.com/johandahlberg/reedsolomon-scala.svg?branch=master)](https://travis-ci.com/johandahlberg/reedsolomon-scala)
+
 [Reed-Solomon error correction](https://en.wikipedia.org/wiki/Reed%E2%80%93Solomon_error_correction) is a
 error-correcting technique, that works by adding error correction bits to a data block of a fixed size. It is able to
 both recover lost data, and correct errors, provided that the following in-equity holds:
