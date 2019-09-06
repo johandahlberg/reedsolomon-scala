@@ -1,0 +1,6 @@
+target/
+.metals/
+project/.*
+.bloop/
+.cache
+reedsolomon-workspace.code-workspace
