@@ -4,7 +4,7 @@
 
 [Reed-Solomon error correction](https://en.wikipedia.org/wiki/Reed%E2%80%93Solomon_error_correction) is a
 error-correcting technique, that works by adding error correction bits to a data block of a fixed size. It is able to
-both recover lost data, and correct errors, provided that the following in-equity holds:
+both recover lost data, and correct errors, provided that the following inequality holds:
 
 ```
 2*nbr_erasures + nbr_of_errors <= size_of_dictonary - message_size
