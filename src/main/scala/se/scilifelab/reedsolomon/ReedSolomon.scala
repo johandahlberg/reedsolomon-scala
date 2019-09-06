@@ -192,6 +192,7 @@ case class ReedSolomonCoder(
       val ret = correctedC.cooefficients.dropRight(n - k).map(_.i)
       val ecc = correctedC.cooefficients.takeRight(n - k).map(_.i)
 
+      // TODO Clean this up
       if (noStrip) {
         if (ret.isEmpty) {
           (Array.fill(k)(0), ecc)
@@ -204,14 +205,24 @@ case class ReedSolomonCoder(
     }
   }
 
-  def check(r: Array[Int]): Boolean = {
+  /**
+    * Check if a message contains any errors
+    * @param message to check for errors
+    * @return true if there were errors in the message, otherwise false
+    */
+  def check(message: Array[Int]): Boolean = {
 
-    val c = Polynomial.fromFiniteField(field)(r)
+    val c = Polynomial.fromFiniteField(field)(message)
     val currentG = irreducibleGeneratorPolynoial(k)
 
     (c % currentG).isZero
   }
 
+  /**
+    * Check if a message contains any errors
+    * @param message to check for errors
+    * @return true if there were errors in the message, otherwise false
+    */
   def checkFast(r: Array[Int]): Boolean = {
 
     val newR = Polynomial.fromFiniteField(field)(r)
@@ -279,10 +290,10 @@ case class ReedSolomonCoder(
     }
   }
 
-  // Based on Chien Search faster
   protected[reedsolomon] def chienSearch(
       sigma: Polynomial[field.GF2Int]
   ): (Array[field.GF2Int], Array[Int]) = {
+    // Based on Chien Search faster
     val p = field.GF2Int(this.generator)
     val (x, j) = Range(0, n).foldLeft((Array[field.GF2Int](), Array[Int]())) {
       case ((x, j), l) =>
@@ -303,13 +314,13 @@ case class ReedSolomonCoder(
     return (x, j)
   }
 
-  // based on berlekamp_massey_fast
   protected[reedsolomon] def berlekampMassey(
       s: Polynomial[field.GF2Int],
       erasures_loc: Option[Polynomial[field.GF2Int]] = None,
       erasures_eval: Option[Polynomial[field.GF2Int]] = None,
       erasures_count: Int = 0
   ): (Polynomial[field.GF2Int], Polynomial[field.GF2Int]) = {
+    // based on berlekamp_massey_fast
 
     case class ValueContainer(
         sigma: Polynomial[field.GF2Int],
@@ -326,11 +337,13 @@ case class ReedSolomonCoder(
         val sigma = Polynomial(polynomial.cooefficients)
         val sigmaPrev = Polynomial(sigma.cooefficients)
         val b = Polynomial(sigma.cooefficients)
-        // TODO Prettier error handling here
+
         val omega = Polynomial(erasures_eval.get.cooefficients)
         val omegaPrev = Polynomial(omega.cooefficients)
         val a = Polynomial(omega.cooefficients)
+
         val lUpdate = 0
+
         ValueContainer(
           sigma,
           sigmaPrev,
@@ -406,5 +419,4 @@ case class ReedSolomonCoder(
       (comp.sigma, comp.omega)
     }
   }
-
 }
